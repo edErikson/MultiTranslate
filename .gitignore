@@ -1,3 +1,8 @@
+# project ignored files
+*.xml
+*.iml
+*.db
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

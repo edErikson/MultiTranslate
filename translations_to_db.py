@@ -51,6 +51,8 @@ def populate_database():
     """
     session = Session()
 
+    added_categories = False  # Keep track of whether we've added any categories
+
     for tag, (category_name, words) in enumerate(eng_word_lists.items()):
         tag += 1
         # Check if the category already exists in the database
@@ -61,9 +63,11 @@ def populate_database():
             words_str = ", ".join(words)
             category = Translations(category_name=category_name, words=words_str, tag=tag, language="English")
             session.add(category)
+            added_categories = True
 
         # Commit the changes and close the session
-    session.commit()
+    if added_categories:
+        session.commit()
     session.close()
 
 def translate_words(target_language):

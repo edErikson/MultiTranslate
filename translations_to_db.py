@@ -1,5 +1,5 @@
-from sqlalchemy import create_engine, Column, Integer, String, exc
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
+from sqlalchemy.orm import relationship, declarative_base, sessionmaker
 from words import eng_word_lists
 from googletrans import Translator
 
@@ -12,27 +12,7 @@ engine = create_engine('sqlite:///translations.db')
 Session = sessionmaker(bind=engine)
 
 
-class Translations(Base):
-    """
-    ORM class for the words table.
-    """
-    __tablename__ = 'words'
-
-    id = Column(Integer, primary_key=True)
-    category_name = Column(String)
-    words = Column(String, unique=True)
-    tag = Column(Integer)  # This tag is used to identify groups of related translations across different languages
-    language = Column(String)
-
-    def __repr__(self):
-        return f"<Translations(category_name='{self.category_name}'," \
-               f" words='{self.words}'," \
-               f" tag={self.tag}," \
-               f" language='{self.language}')>"
-
-
 LANG_CODES = [
-    {'name': 'English', 'code': 'en'},
     {'name': 'Swedish', 'code': 'sv'},
     {'name': 'Finnish', 'code': 'fi'},
     {'name': 'Estonian', 'code': 'et'},
@@ -41,63 +21,57 @@ LANG_CODES = [
     {'name': 'Russian', 'code': 'ru'},
     {'name': 'Polish', 'code': 'pl'},
 ]
+
+
+class Category(Base):
+    __tablename__ = 'categories'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
+class Word(Base):
+    __tablename__ = 'words'
+    id = Column(Integer, primary_key=True)
+    word = Column(String)
+    category_id = Column(Integer, ForeignKey('categories.id'))
+
+    category = relationship("Category", back_populates="words")
+
+
+Category.words = relationship("Word", order_by=Word.id, back_populates="category")
+
+
+class Translation(Base):
+    __tablename__ = 'translations'
+    id = Column(Integer, primary_key=True)
+    word_id = Column(Integer, ForeignKey('words.id'))
+    language = Column(String)
+    translation = Column(String)
+
+    word = relationship("Word", back_populates="translations")
+
+
+Word.translations = relationship("Translation", order_by=Translation.id, back_populates="word")
+
+# Translator setup
 translator = Translator()
 
 
 def populate_database():
-    """
-    Populate the database with words from the English word dictionary.
-    All words from the same category are stored in a single string.
-    """
     session = Session()
 
-    added_categories = False  # Keep track of whether we've added any categories
-
-    for tag, (category_name, words) in enumerate(eng_word_lists.items()):
-        tag += 1
-        # Check if the category already exists in the database
-        existing_category = session.query(Translations).filter_by(category_name=category_name,
-                                                                  language="English").first()
-        if existing_category is None:
-            # Join all words into a single string separated by commas
-            words_str = ", ".join(words)
-            category = Translations(category_name=category_name, words=words_str, tag=tag, language="English")
-            session.add(category)
-            added_categories = True
-
-        # Commit the changes and close the session
-    if added_categories:
-        session.commit()
-    session.close()
-
-def translate_words(target_language):
-    """
-    Translate English words to the target language and store the translations in the database.
-    Note: This function should be called after populate_database, as it relies on the English
-    translations being present in the database.
-    """
-    session = Session()
-
-    # Fetch all English categories from the database
-    english_translations = session.query(Translations).filter_by(language="English").all()
-
-    for translation in english_translations:
-        # Translate the category name
-        translated_category_name = translator.translate(translation.category_name, dest=target_language['code'], src='en').text
-
-        # Check if the translated category already exists in the database
-        existing_translated_category = session.query(Translations).filter_by(category_name=translated_category_name,
-                                                                             language=target_language['name']).first()
-        if existing_translated_category is None:
-            # Translate the words
-            translated_words = translator.translate(translation.words, dest=target_language['code'], src='en').text
-
-            # Create a new row for the translated words
-            translated_category = Translations(category_name=translated_category_name, words=translated_words,
-                                               tag=translation.tag, language=target_language['name'])
-            session.add(translated_category)
-
-    # Commit the changes and close the session
+    # Here I'm assuming that the eng_word_lists is a dictionary
+    # where each key is a category and the values are lists of words in that category
+    for category_name, words in eng_word_lists.items():
+        category = Category(name=category_name)
+        session.add(category)
+        for word in words:
+            w = Word(word=word, category=category)
+            session.add(w)
+            for lang in LANG_CODES:
+                translation = translator.translate(word, dest=lang['code'], src='en').text
+                t = Translation(word=w, language=lang['name'], translation=translation)
+                session.add(t)
     session.commit()
     session.close()
 
@@ -106,22 +80,5 @@ if __name__ == '__main__':
     # Create tables
     Base.metadata.create_all(engine)
 
-    # Populate the database with English words
+    # Populate the database with English words and their translations
     populate_database()
-
-    # Translate words to all languages in LANG_CODES (excluding English)
-    for target_language in LANG_CODES[1:]:
-        translate_words(target_language)
-
-    # Create a new engine and session for the purpose of retrieving and printing all database rows.
-    # This is separate from the above operations to ensure all transactions are committed before we query the database.
-    engine = create_engine('sqlite:///translations.db')
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    rows = session.query(Translations).all()
-
-    for row in rows:
-        print(
-            f"ID: {row.id}, Category: {row.category_name}, Words: {row.words}, Tag: {row.tag}, Language: {row.language}")
-
-    session.close()

@@ -57,4 +57,4 @@ for word, translation in word_translation_pairs:
     print(f'{word}: {translation}')
 ```
 
-Each function opens and closes a session to interact with the database, fetching the required data and returning it in a format that's easy to work with. The use of SQLAlchemy's ORM capabilities ensures that the code is clean, efficient, and maintainable.
+Each function opens and closes a session to interact with the database, fetching the required data and returning it in a format that's easy to work with.

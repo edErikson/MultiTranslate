@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship, declarative_base, sessionmaker
 from words import eng_word_lists
 from googletrans import Translator
 
+# Define declarative base class for SQLAlchemy ORM
 Base = declarative_base()
 
 # Database engine setup. Here we're using SQLite.
@@ -12,6 +13,7 @@ engine = create_engine('sqlite:///translations.db')
 Session = sessionmaker(bind=engine)
 
 
+# List of language codes to translate English words into
 LANG_CODES = [
     {'name': 'Swedish', 'code': 'sv'},
     {'name': 'Finnish', 'code': 'fi'},
@@ -23,12 +25,14 @@ LANG_CODES = [
 ]
 
 
+# Define the Category model, which represents a category of words
 class Category(Base):
     __tablename__ = 'categories'
     id = Column(Integer, primary_key=True)
     name = Column(String)
 
 
+# Define the Word model, representing a word in English and its category
 class Word(Base):
     __tablename__ = 'words'
     id = Column(Integer, primary_key=True)
@@ -41,6 +45,7 @@ class Word(Base):
 Category.words = relationship("Word", order_by=Word.id, back_populates="category")
 
 
+# Define the Translation model, representing a translation of a word into another language
 class Translation(Base):
     __tablename__ = 'translations'
     id = Column(Integer, primary_key=True)
@@ -60,8 +65,7 @@ translator = Translator()
 def populate_database():
     session = Session()
 
-    # Here I'm assuming that the eng_word_lists is a dictionary
-    # where each key is a category and the values are lists of words in that category
+    # For each category and list of words in that category
     for category_name, words in eng_word_lists.items():
         category = Category(name=category_name)
         session.add(category)
@@ -69,6 +73,7 @@ def populate_database():
             w = Word(word=word, category=category)
             session.add(w)
             for lang in LANG_CODES:
+                # Translate each word into each language and create a Translation object
                 translation = translator.translate(word, dest=lang['code'], src='en').text
                 t = Translation(word=w, language=lang['name'], translation=translation)
                 session.add(t)
